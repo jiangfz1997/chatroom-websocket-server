@@ -1,0 +1,14 @@
+{
+  "connection": {
+    "addr": "localhost",
+    "port": 6379,
+    "password": "",
+    "db": 0,
+    "timeout": 5
+  },
+  "key_expirations": {
+    "chat_message": 60,
+    "user_status": 300
+  }
+}
+
