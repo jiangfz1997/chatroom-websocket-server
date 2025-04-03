@@ -51,7 +51,7 @@ func InitDB() {
 		}
 
 	} else {
-		log.Log.Info("Connecting AWS DynamoDB")
+		log.Log.Infof("Connecting AWS DynamoDB")
 		// 加载默认配置，依赖环境变量或 IAM 角色
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
 			config.WithRegion(region),
@@ -63,7 +63,7 @@ func InitDB() {
 
 	// 创建 DynamoDB 客户端
 	DB = ddb.NewFromConfig(cfg)
-	log.Log.Info("🔗 DynamoDB 客户端初始化成功")
+	log.Log.Infof("🔗 DynamoDB 客户端初始化成功")
 
 	// 可选：列出当前表名，确认连接成功
 	resp, err := DB.ListTables(context.TODO(), &ddb.ListTablesInput{})

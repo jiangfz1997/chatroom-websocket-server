@@ -191,7 +191,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 }
 
 func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynamodb.Message, error) {
-	log.Log.Info("🧩 准备从 DynamoDB 拉取消息 | Table: messages | RoomID: %s | Before: %s | Limit: %d", roomID, beforeTime, limit)
+	log.Log.Infof("🧩 准备从 DynamoDB 拉取消息 | Table: messages | RoomID: %s | Before: %s | Limit: %d", roomID, beforeTime, limit)
 	input := &ddb.QueryInput{
 		TableName: aws.String("messages"),
 		KeyConditions: map[string]types.Condition{
