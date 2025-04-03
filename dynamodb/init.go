@@ -3,30 +3,31 @@ package dynamodb
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"log"
-	"os"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"os"
+	log "websocket_server/logger"
 )
 
 var DB *ddb.Client
 
 func InitDB() {
-	env := os.Getenv("DYNAMODB_ENV")
-	if env == "" {
-		env = "local" // 默认环境
+	endpoint := os.Getenv("DYNAMODB_ENDPOINT") // 本地模式會設這個
+	region := os.Getenv("DYNAMODB_REGION")
+	if region == "" {
+		region = "us-west-2" // fallback
+		log.Log.Warn("⚠️ DYNAMODB_REGION 未设置，默认使用 us-west-2")
+	} else {
+		log.Log.Infof("🌐 DYNAMODB_REGION = %s", region)
 	}
-
-	region := "us-west-2"
 	var cfg aws.Config
 	var err error
 
-	if env == "local" {
-		endpoint := "http://localhost:8000" // 本地 DynamoDB
-		log.Println("🌱 连接本地 DynamoDB (local mode)")
+	if endpoint != "" {
+		log.Log.Info("🧪 连接本地 DynamoDB (local mode)")
+		log.Log.Infof("🔌 使用 endpoint: %s", endpoint)
 
 		// 设置本地模拟器的 endpoint
 		customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, _ ...interface{}) (aws.Endpoint, error) {
@@ -46,23 +47,29 @@ func InitDB() {
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "dummy")),
 		)
 		if err != nil {
-			log.Fatal("❌ 加载本地 DynamoDB 配置失败:", err)
+			log.Log.Fatalf("Failed to load DynamoDB(local) config:", err)
 		}
 
-	} else if env == "aws" {
-		log.Println("🚀 连接 AWS DynamoDB（真实云服务）")
+	} else {
+		log.Log.Info("Connecting AWS DynamoDB")
 		// 加载默认配置，依赖环境变量或 IAM 角色
 		cfg, err = config.LoadDefaultConfig(context.TODO(),
 			config.WithRegion(region),
 		)
 		if err != nil {
-			log.Fatal("❌ 加载 AWS 配置失败:", err)
+			log.Log.Fatalf("Failed to load aws config: ", err)
 		}
-	} else {
-		log.Fatalf("❌ 未知 DYNAMODB_ENV：%s", env)
 	}
 
 	// 创建 DynamoDB 客户端
 	DB = ddb.NewFromConfig(cfg)
-	log.Println("✅ 已连接到 DynamoDB")
+	log.Log.Info("🔗 DynamoDB 客户端初始化成功")
+
+	// 可选：列出当前表名，确认连接成功
+	resp, err := DB.ListTables(context.TODO(), &ddb.ListTablesInput{})
+	if err != nil {
+		log.Log.Errorf("⚠️ 无法列出表，连接可能有误: %v", err)
+	} else {
+		log.Log.Infof("📋 当前 DynamoDB 表: %v", resp.TableNames)
+	}
 }

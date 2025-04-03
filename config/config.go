@@ -10,7 +10,6 @@ import (
 func InitConfig() {
 	viper.SetConfigType("json")
 
-	// 读取 base 配置
 	viper.SetConfigName("base")
 	viper.AddConfigPath("./config/")
 	err := viper.ReadInConfig()

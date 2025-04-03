@@ -2,36 +2,40 @@ package ws
 
 import (
 	"context"
-	"fmt"
 	"github.com/redis/go-redis/v9"
+	"log"
+	"os"
+	"strconv"
 	"time"
 	"websocket_server/config"
-	//"time"
 )
 
 var Rdb *redis.Client
 var ctx = context.Background()
 
 func Init_redis() {
-
-	// 连接 Redis
-	conf := config.GetRedisConfig()
+	addr := os.Getenv("REDIS_ADDR")
+	password := os.Getenv("REDIS_PASSWORD")
+	db, _ := strconv.Atoi(os.Getenv("REDIS_DB"))
+	timeoutSec, _ := strconv.Atoi(os.Getenv("REDIS_TIMEOUT"))
+	if addr == "" {
+		addr = "redis:6379" // ✅ K3s 內網地址（Cluster DNS）
+		log.Println("Redis env not set redis:6379")
+	} else {
+		log.Println("Redis env REDIS_ADDR:", addr)
+	}
 	Rdb = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", conf.Host, conf.Port),
-		Password: conf.Password,
-		DB:       conf.DB,
+		Addr:        addr,
+		Password:    password,
+		DB:          db,
+		DialTimeout: time.Duration(timeoutSec) * time.Second,
 	})
+	if err := Rdb.Ping(ctx).Err(); err != nil {
+		log.Fatal("Redis connection failed:", err)
+	} else {
+		log.Println("Redis connection successful")
+	}
 }
-
-//var conf = config.GetRedisConfig()
-//
-//var ctx = context.Background()
-//
-//var Rdb = redis.NewClient(&redis.Options{
-//	Addr:     fmt.Sprintf("%s:%d", conf.Host, conf.Port),
-//	Password: conf.Password,
-//	DB:       conf.DB,
-//})
 
 var ttl = config.GetRedisExpireSeconds("chat_message")
 
@@ -42,7 +46,6 @@ func SaveMessageToRedis(roomID string, message []byte) error {
 
 	pipe := Rdb.Pipeline()
 
-	// ✅ 写入前端展示缓存
 	pipe.LPush(ctx, msgKey, message)
 	pipe.LTrim(ctx, msgKey, 0, 49)
 	pipe.Expire(ctx, msgKey, time.Duration(ttl)*time.Second) // expire time

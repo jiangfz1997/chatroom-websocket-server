@@ -3,8 +3,9 @@ package kafka
 import (
 	"context"
 	"log"
+	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 )
 
 type Consumer struct {
@@ -35,17 +36,36 @@ func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessag
 
 	group, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
-		log.Fatalf("❌ Kafka 消費者初始化失敗: %v", err)
+		//log.Fatalf("Kafka customer init failed: %v", err)
+		log.Printf("⚠️ Kafka customer init failed (non-fatal): %v", err)
+		return
 	}
 
+	//go func() {
+	//	for {
+	//		err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
+	//		if err != nil {
+	//			log.Printf("⚠️ Kafka consumer err: %v", err)
+	//		}
+	//	}
+	//}()
+
 	go func() {
+		retries := 0
 		for {
+			if retries > 10 {
+				log.Println("❌ Kafka consumer 重試次數過多，放棄連接")
+				break
+			}
+
 			err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
 			if err != nil {
 				log.Printf("⚠️ Kafka 消費異常: %v", err)
+				retries++
+				time.Sleep(5 * time.Second) // 🔁 避免 log 洪水
 			}
 		}
 	}()
-	log.Println("✅ Kafka 消費者已啟動，訂閱 topic:", topic)
+	log.Println("✅ Kafka consumer's up，subscribing topic:", topic)
 
 }

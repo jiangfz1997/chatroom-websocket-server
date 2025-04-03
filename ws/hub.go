@@ -2,8 +2,7 @@ package ws
 
 import (
 	"encoding/json"
-	"github.com/Shopify/sarama"
-	"github.com/google/uuid"
+	"github.com/IBM/sarama"
 	"github.com/gorilla/websocket"
 	"log"
 	"sync"
@@ -35,13 +34,12 @@ type Hub struct {
 func NewHub() *Hub {
 	return &Hub{
 		Rooms:    make(map[string]*Room),
-		ServerID: uuid.New().String(), // ✅ 自動生成唯一 Server ID
+		ServerID: "",
 	}
 }
 
 var GlobalHub = NewHub()
 
-// 添加客户端到房间
 func (h *Hub) JoinRoom(roomID string, client *Client) {
 	h.Lock.Lock()
 	room, exists := h.Rooms[roomID]

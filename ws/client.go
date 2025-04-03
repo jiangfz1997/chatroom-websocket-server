@@ -3,16 +3,16 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	ddb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gorilla/websocket"
-	"log"
 	"time"
 	"websocket_server/dynamodb"
 	"websocket_server/kafka"
+	log "websocket_server/logger"
 )
 
 // 心跳超时设置
@@ -39,28 +39,11 @@ func (c *Client) ReadPump() {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			log.Println("读消息错误:", err)
+			log.Log.Warnf("读消息错误:", err)
 			break
 		}
 
 		c.HandleMessage(message)
-		//var incoming map[string]string
-		//if err := json.Unmarshal(message, &incoming); err != nil {
-		//	log.Println("解析前端消息失败:", err)
-		//	continue
-		//}
-		//
-		//msg := map[string]string{
-		//	"sender": c.Username,
-		//	"text":   incoming["text"],
-		//}
-		//jsonMsg, err := json.Marshal(msg)
-		//if err != nil {
-		//	log.Println("JSON 编码失败:", err)
-		//	continue
-		//}
-		//
-		//c.Hub.Broadcast(c.RoomID, jsonMsg)
 	}
 }
 
@@ -83,7 +66,7 @@ func (c *Client) WritePump() {
 			}
 			err := c.Conn.WriteMessage(websocket.TextMessage, msg)
 			if err != nil {
-				log.Println("写消息错误:", err)
+				log.Log.Warnf("Write message err:", err)
 				return
 			}
 		case <-ticker.C:
@@ -100,7 +83,7 @@ func (c *Client) HandleMessage(msg []byte) {
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(msg, &base); err != nil {
-		log.Println("⚠️ 无法解析消息类型:", err)
+		log.Log.Warnf("Cannot parse message:", err)
 		return
 	}
 
@@ -110,7 +93,7 @@ func (c *Client) HandleMessage(msg []byte) {
 	case "message":
 		c.handleBroadcastMessage(msg)
 	default:
-		log.Println("⚠️ 未知消息类型:", base.Type)
+		log.Log.Warnf("Unknow message type:", base.Type)
 	}
 }
 
@@ -119,7 +102,7 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(msg, &incoming); err != nil {
-		log.Println("⚠️ 文本消息解析失败:", err)
+		log.Log.Errorf("⚠️ 文本消息解析失败:", err)
 		return
 	}
 
@@ -130,7 +113,7 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 		"roomID": c.RoomID,
 		"sentAt": time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	log.Printf("📥 WebSocket 收到來自用戶 %s 的消息，將轉發給本地房間並推送 Kafka", c.Username)
+	log.Log.Info("📥 WebSocket 收到來自用戶 %s 的消息，將轉發給本地房間並推送 Kafka", c.Username)
 
 	jsonMsg, _ := json.Marshal(out)
 	c.Hub.Broadcast(c.RoomID, jsonMsg)
@@ -147,7 +130,7 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 	}
 	_, _, err := kafka.Producer.SendMessage(kafkaMsg)
 	if err != nil {
-		log.Printf("⚠️ Kafka 發送失敗: %v", err)
+		log.Log.Errorf("⚠️ Kafka 發送失敗: %v", err)
 	}
 }
 
@@ -160,7 +143,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 		Limit  int    `json:"limit"`
 	}
 	if err := json.Unmarshal(msg, &req); err != nil {
-		log.Println("⚠️ fetch_history 消息解析失败:", err)
+		log.Log.Errorf("⚠️ fetch_history 消息解析失败:", err)
 		return
 	}
 
@@ -169,7 +152,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 	if req.Before != "" {
 		parsedTime, err := time.Parse(time.RFC3339Nano, req.Before)
 		if err != nil {
-			log.Printf("⚠️ 时间戳格式错误: %v", err)
+			log.Log.Errorf("⚠️ 时间戳格式错误: %v", err)
 			return
 		}
 		beforeTime = parsedTime
@@ -178,7 +161,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 	// Step 3: 拉取历史消息
 	messages, err := getMessagesFromDynamo(req.RoomID, beforeTime.Format(time.RFC3339Nano), req.Limit)
 	if err != nil {
-		log.Printf("⚠️ 获取 DynamoDB 历史消息失败: %v", err)
+		log.Log.Errorf("⚠️ 获取 DynamoDB 历史消息失败: %v", err)
 		return
 	}
 
@@ -199,7 +182,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
-		log.Println("⚠️ JSON 编码失败:", err)
+		log.Log.Errorf("⚠️ JSON 编码失败:", err)
 		return
 	}
 
@@ -208,6 +191,7 @@ func (c *Client) handleFetchHistory(msg []byte) {
 }
 
 func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynamodb.Message, error) {
+	log.Log.Info("🧩 准备从 DynamoDB 拉取消息 | Table: messages | RoomID: %s | Before: %s | Limit: %d", roomID, beforeTime, limit)
 	input := &ddb.QueryInput{
 		TableName: aws.String("messages"),
 		KeyConditions: map[string]types.Condition{
@@ -230,7 +214,7 @@ func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynam
 
 	resp, err := dynamodb.DB.Query(context.TODO(), input)
 	if err != nil {
-		log.Printf("⚠️ DynamoDB 查询失败: %v", err)
+		log.Log.Errorf("⚠️ DynamoDB 查询失败: %v", err)
 		return nil, err
 	}
 
@@ -238,11 +222,11 @@ func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynam
 	for _, item := range resp.Items {
 		var msg dynamodb.Message
 		if err := attributevalue.UnmarshalMap(item, &msg); err != nil {
-			log.Printf("⚠️ 解码消息失败: %v", err)
+			log.Log.Errorf("⚠️ 解码消息失败: %v", err)
 			continue
 		}
 		result = append(result, msg)
 	}
-	log.Printf("Get MessagesFromDynamo: %d 条消息", len(result))
+	log.Log.Info("Get MessagesFromDynamo: %d 条消息", len(result))
 	return result, nil
 }
