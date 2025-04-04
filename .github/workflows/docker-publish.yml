@@ -42,4 +42,4 @@ jobs:
           port: 22
           script: |
             export KUBECONFIG=/home/ubuntu/.kube/config
-            kubectl rollout restart deployment ws-service -n chat-app
+            kubectl rollout restart deployment ws-server -n chat-app
