@@ -14,7 +14,7 @@ func InitConfig() {
 	viper.AddConfigPath("./config/")
 	err := viper.ReadInConfig()
 	if err != nil {
-		log.Fatalf("❌ 加载 base.json 失败: %v", err)
+		log.Fatalf("加载 base.json 失败: %v", err)
 	}
 
 	// 合并 redis.json
@@ -26,7 +26,7 @@ func InitConfig() {
 	// 合并当前环境配置（比如 local.json 或 prod.json）
 	//loadAdditionalConfig("local")
 
-	fmt.Println("✅ 所有配置文件加载成功")
+	fmt.Println("所有配置文件加载成功")
 }
 
 func loadAdditionalConfig(name string) {
@@ -36,12 +36,12 @@ func loadAdditionalConfig(name string) {
 	subViper.AddConfigPath("./config/")
 
 	if err := subViper.ReadInConfig(); err != nil {
-		log.Printf("⚠️ 跳过 %s.json: %v", name, err)
+		log.Printf("跳过 %s.json: %v", name, err)
 		return
 	}
 
 	err := viper.MergeConfigMap(subViper.AllSettings())
 	if err != nil {
-		log.Printf("⚠️ 合并 %s.json 失败: %v", name, err)
+		log.Printf("合并 %s.json 失败: %v", name, err)
 	}
 }

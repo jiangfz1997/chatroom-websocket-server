@@ -2,8 +2,8 @@ package kafka
 
 import (
 	"github.com/IBM/sarama"
-	"log"
 	"time"
+	log "websocket_server/logger"
 )
 
 var Producer sarama.SyncProducer
@@ -18,7 +18,7 @@ var Producer sarama.SyncProducer
 //	Producer, err = sarama.NewSyncProducer(brokers, config)
 //	if err != nil {
 //		//log.Fatalf("Kafka producer init failed: %v", err)
-//		log.Printf("⚠️ Kafka producer init failed (non-fatal): %v", err)
+//		log.Printf("Kafka producer init failed (non-fatal): %v", err)
 //		return
 //	}
 //
@@ -30,18 +30,18 @@ func InitKafkaProducer(brokers []string) {
 	config.Producer.Return.Successes = true
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	config.Producer.Retry.Max = 5
-	log.Printf("Initializing Kafka producer with brokers: %v", brokers)
+	log.Log.Infof("Initializing Kafka producer with brokers:%v", brokers)
 	var err error
 	maxRetries := 10
 	for i := 1; i <= maxRetries; i++ {
 		Producer, err = sarama.NewSyncProducer(brokers, config)
 		if err == nil {
-			log.Println("✅ Kafka producer initialized successfully")
+			log.Log.Info("Kafka producer initialized successfully")
 			return
 		}
-		log.Printf("⚠️ Kafka producer init failed (attempt %d/%d): %v", i, maxRetries, err)
+		log.Log.Warnf("Kafka producer init failed (attempt %d/%d)：%v", i, maxRetries, err)
 		time.Sleep(3 * time.Second)
 	}
 
-	log.Printf("❌ Kafka producer failed after %d attempts: %v", maxRetries, err)
+	log.Log.Errorf("Kafka producer failed after %d attempts: %v", maxRetries, err)
 }

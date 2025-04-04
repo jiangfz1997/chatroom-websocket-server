@@ -2,10 +2,9 @@ package kafka
 
 import (
 	"context"
-	"log"
-	"time"
-
 	"github.com/IBM/sarama"
+	"time"
+	log "websocket_server/logger"
 )
 
 type Consumer struct {
@@ -23,7 +22,8 @@ func (h *MessageHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return n
 func (h *MessageHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		if h.OnMessage != nil {
-			h.OnMessage(msg) // ✅ 调用你注入的回调
+			log.Log.Debugf("Kafka 收到消息: topic=%s partition=%d offset=%d", msg.Topic, msg.Partition, msg.Offset)
+			h.OnMessage(msg) // 调用你注入的回调
 		}
 		sess.MarkMessage(msg, "")
 	}
@@ -37,7 +37,7 @@ func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessag
 	group, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
 		//log.Fatalf("Kafka customer init failed: %v", err)
-		log.Printf("⚠️ Kafka customer init failed (non-fatal): %v", err)
+		log.Log.Errorf("Kafka customer init failed (non-fatal)：%v", err)
 		return
 	}
 
@@ -45,7 +45,7 @@ func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessag
 	//	for {
 	//		err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
 	//		if err != nil {
-	//			log.Printf("⚠️ Kafka consumer err: %v", err)
+	//			log.Printf("Kafka consumer err: %v", err)
 	//		}
 	//	}
 	//}()
@@ -54,18 +54,18 @@ func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessag
 		retries := 0
 		for {
 			if retries > 10 {
-				log.Println("❌ Kafka consumer 重試次數過多，放棄連接")
+				log.Log.Error("Kafka consumer 重試次數超過上限，終止連線")
 				break
 			}
 
 			err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
 			if err != nil {
-				log.Printf("⚠️ Kafka 消費異常: %v", err)
+				log.Log.Warnf("Kafka 消費異常：%v（第 %d 次重試）", err, retries+1)
 				retries++
 				time.Sleep(5 * time.Second) // 🔁 避免 log 洪水
 			}
 		}
 	}()
-	log.Println("✅ Kafka consumer's up，subscribing topic:", topic)
+	log.Log.Infof("Kafka consumer's up，subscribing topic:%s，groupID：%s", topic, groupID)
 
 }

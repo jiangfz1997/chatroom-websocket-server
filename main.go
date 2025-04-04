@@ -47,7 +47,7 @@ func main() {
 		p = "8081"
 	}
 	port = ":" + p
-	log.Info("✅ WebSocket Server starting on " + port)
+	log.Info("WebSocket Server starting on " + port)
 	err := r.Run(port)
 	if err != nil {
 		return

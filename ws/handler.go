@@ -1,11 +1,11 @@
 package ws
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	log "websocket_server/logger"
 )
 
 var upgrader = websocket.Upgrader{
@@ -18,7 +18,7 @@ func ServeWs(c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("WebSocket 升级失败:", err)
+		log.Log.Errorf("WebSocket 升级失败（用户: %s，房间: %s）: %v", username, roomID, err)
 		return
 	}
 
@@ -31,15 +31,16 @@ func ServeWs(c *gin.Context) {
 	}
 
 	GlobalHub.JoinRoom(roomID, client)
-	log.Printf("✅ 用户 %s 加入房间 %s", username, roomID)
+	log.Log.Infof("用户 [%s] 加入房间 [%s]，连接建立成功", username, roomID)
 
 	go client.WritePump()
 
-	// ✅ 从 Redis 拉历史消息并发送
+	//从 Redis 拉历史消息并发送
 	recent, err := GetRecentMessages(roomID)
 	if err != nil {
-		log.Printf("⚠️ 无法读取 Redis 消息缓存: %v", err)
+		log.Log.Warnf("无法读取 Redis 消息缓存（房间: %s，用户: %s）: %v", roomID, username, err)
 	} else {
+		log.Log.Infof("从 Redis 读取 %d 条历史消息推送给用户 [%s]", len(recent), username)
 		for i := len(recent) - 1; i >= 0; i-- {
 			client.Send <- []byte(recent[i])
 		}
