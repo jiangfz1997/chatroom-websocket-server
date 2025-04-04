@@ -19,7 +19,7 @@ func Init_redis() {
 	db, _ := strconv.Atoi(os.Getenv("REDIS_DB"))
 	timeoutSec, _ := strconv.Atoi(os.Getenv("REDIS_TIMEOUT"))
 	if addr == "" {
-		addr = "redis:6379" // K3s 內網地址（Cluster DNS）
+		addr = "redis:6379"
 		log.Log.Warn("Redis env not set redis:6379")
 	} else {
 		log.Log.Infof("Redis env REDIS_ADDR:", addr)
@@ -31,33 +31,41 @@ func Init_redis() {
 		DialTimeout: time.Duration(timeoutSec) * time.Second,
 	})
 	if err := Rdb.Ping(ctx).Err(); err != nil {
-		log.Log.Fatalf("Redis 连接失败：%v", err)
+		log.Log.Fatalf("Redis connect failed：%v", err)
 	} else {
-		log.Log.Info("Redis 连接成功")
+		log.Log.Info("Redis connect successfully")
 	}
 }
 
 var ttl = config.GetRedisExpireSeconds("chat_message")
 
 // SaveMessageToRedis stores a new chat message in Redis (as raw json)
-func SaveMessageToRedis(roomID string, message []byte) error {
+func SaveMessageToRedis(roomID string, timestamp int64, message []byte) error {
+	dedupKey := "dedup:room:" + roomID
+
+	ok, err := Rdb.SAdd(ctx, dedupKey, timestamp).Result()
+	if err != nil {
+		log.Log.Errorf("SADD failed: %v", err)
+		return err
+	}
+	if ok == 0 {
+		log.Log.Infof("Msg duplicated，skip write to Redis。room=%s timestamp=%d", roomID, timestamp)
+		return nil
+	}
+
 	msgKey := "room:" + roomID + ":messages"
 	persistKey := "room:" + roomID + ":to_persist"
 
-	log.Log.Debugf("保存消息到 Redis 房间 [%s]，设置 TTL: %ds", roomID, ttl)
-
 	pipe := Rdb.Pipeline()
-
 	pipe.LPush(ctx, msgKey, message)
 	pipe.LTrim(ctx, msgKey, 0, 49)
-	pipe.Expire(ctx, msgKey, time.Duration(ttl)*time.Second) // expire time
-	// 同时写入待入库队列
+	pipe.Expire(ctx, msgKey, time.Duration(ttl)*time.Second)
 	pipe.RPush(ctx, persistKey, message)
-	pipe.SAdd(ctx, "rooms:active", roomID) // 注册活跃房间
+	pipe.SAdd(ctx, "rooms:active", roomID)
 
-	_, err := pipe.Exec(ctx)
+	_, err = pipe.Exec(ctx)
 	if err != nil {
-		log.Log.Errorf("Redis 执行 pipeline 操作失败（房间: %s）: %v", roomID, err)
+		log.Log.Errorf("Redis pipeline failed (room: %s): %v", roomID, err)
 	}
 	return err
 }
@@ -65,6 +73,6 @@ func SaveMessageToRedis(roomID string, message []byte) error {
 // GetRecentMessages returns the latest 50 messages from a room
 func GetRecentMessages(roomID string) ([]string, error) {
 	key := "room:" + roomID + ":messages"
-	log.Log.Debugf("从 Redis 获取房间 [%s] 的最近消息", roomID)
+	log.Log.Debugf("Get message of room [%s] from redis", roomID)
 	return Rdb.LRange(ctx, key, 0, 49).Result()
 }

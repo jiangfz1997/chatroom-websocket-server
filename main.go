@@ -4,7 +4,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"log"
+	//"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -19,9 +19,9 @@ import (
 var port = ":8081"
 
 func main() {
-	logger.InitLogger() // 初始化日志系统
-	log := logger.Log   // 使用自定义 logrus 实例
-	log.Info("服务器启动流程开始")
+	logger.InitLogger()
+	log := logger.Log
+	log.Info("Server starting...")
 	config.InitConfig()
 	_ = godotenv.Load(".env")
 
@@ -43,7 +43,7 @@ func main() {
 
 	p := os.Getenv("PORT")
 	if p == "" {
-		log.Info("未设置端口，使用默认端口 8081")
+		log.Info("Port not set, using default 8081")
 		p = "8081"
 	}
 	port = ":" + p
@@ -64,11 +64,11 @@ func setupServerID() string {
 	if strings.HasPrefix(baseID, "ws-local") {
 		suffix := randSuffix()
 		finalID := baseID + "-" + suffix
-		log.Println("📡 Using local random ServerID:", finalID)
+		logger.Log.Infof("📡 Using local random ServerID: %s", finalID)
 		return finalID
 	}
 
-	log.Println("📡Using ServerID from .env:", baseID)
+	logger.Log.Infof("📡Using ServerID from .env: %s", baseID)
 	return baseID
 }
 

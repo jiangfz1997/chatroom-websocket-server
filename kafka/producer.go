@@ -8,23 +8,6 @@ import (
 
 var Producer sarama.SyncProducer
 
-//func InitKafkaProducer(brokers []string) {
-//	config := sarama.NewConfig()
-//	config.Producer.Return.Successes = true
-//	config.Producer.RequiredAcks = sarama.WaitForAll
-//	config.Producer.Retry.Max = 5
-//
-//	var err error
-//	Producer, err = sarama.NewSyncProducer(brokers, config)
-//	if err != nil {
-//		//log.Fatalf("Kafka producer init failed: %v", err)
-//		log.Printf("Kafka producer init failed (non-fatal): %v", err)
-//		return
-//	}
-//
-//	log.Println("Kafka producer initialized successfully")
-//}
-
 func InitKafkaProducer(brokers []string) {
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
@@ -43,5 +26,5 @@ func InitKafkaProducer(brokers []string) {
 		time.Sleep(3 * time.Second)
 	}
 
-	log.Log.Errorf("Kafka producer failed after %d attempts: %v", maxRetries, err)
+	log.Log.Fatalf("Kafka producer failed after %d attempts: %v", maxRetries, err)
 }

@@ -55,7 +55,7 @@ func (w *DailyLogWriter) rotateFileIfNeeded() {
 
 	file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		fmt.Printf("日志文件打开失败: %v\n", err)
+		fmt.Printf("Failed to open log file: %v\n", err)
 		w.file = nil
 		return
 	}
@@ -77,7 +77,7 @@ func (w *DailyLogWriter) autoRotate() {
 func InitLogger() {
 	writer := NewDailyLogWriter("logs", "server")
 
-	Log.SetOutput(io.MultiWriter(writer, os.Stdout)) // 输出到文件和控制台
+	Log.SetOutput(io.MultiWriter(writer, os.Stdout))
 
 	Log.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,

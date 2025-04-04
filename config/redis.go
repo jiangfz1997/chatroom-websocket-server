@@ -4,16 +4,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-// RedisConf 结构体，用于连接信息
+// RedisConf Redis connection configuration
 type RedisConf struct {
-	Host     string // 拆开用 host 和 port 更语义化
+	Host     string
 	Port     int
 	Password string
 	DB       int
 	Timeout  int
 }
 
-// GetRedisConfig 获取 Redis 连接信息
 func GetRedisConfig() RedisConf {
 	return RedisConf{
 		Host:     viper.GetString("connection.addr"),
@@ -24,7 +23,6 @@ func GetRedisConfig() RedisConf {
 	}
 }
 
-// GetRedisExpireSeconds 获取某类 Redis key 的过期秒数（默认 120 秒）
 func GetRedisExpireSeconds(keyType string) int {
 	key := "key_expirations." + keyType
 	if viper.IsSet(key) {

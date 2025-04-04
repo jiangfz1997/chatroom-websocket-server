@@ -18,7 +18,7 @@ func ServeWs(c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Log.Errorf("WebSocket 升级失败（用户: %s，房间: %s）: %v", username, roomID, err)
+		log.Log.Errorf("WebSocket upgrade failed（user: %s，room: %s）: %v", username, roomID, err)
 		return
 	}
 
@@ -31,16 +31,15 @@ func ServeWs(c *gin.Context) {
 	}
 
 	GlobalHub.JoinRoom(roomID, client)
-	log.Log.Infof("用户 [%s] 加入房间 [%s]，连接建立成功", username, roomID)
+	log.Log.Infof("User [%s] entered room [%s]，conneciton established successfully", username, roomID)
 
 	go client.WritePump()
 
-	//从 Redis 拉历史消息并发送
 	recent, err := GetRecentMessages(roomID)
 	if err != nil {
-		log.Log.Warnf("无法读取 Redis 消息缓存（房间: %s，用户: %s）: %v", roomID, username, err)
+		log.Log.Warnf("Cannot get message from Redis （room: %s，user: %s）: %v", roomID, username, err)
 	} else {
-		log.Log.Infof("从 Redis 读取 %d 条历史消息推送给用户 [%s]", len(recent), username)
+		log.Log.Infof("Read %d historical messages from Redis and sent to user [%s]", len(recent), username)
 		for i := len(recent) - 1; i >= 0; i-- {
 			client.Send <- []byte(recent[i])
 		}

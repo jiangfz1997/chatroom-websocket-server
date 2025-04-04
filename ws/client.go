@@ -15,7 +15,6 @@ import (
 	log "websocket_server/logger"
 )
 
-// 心跳超时设置
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
@@ -27,7 +26,7 @@ func (c *Client) ReadPump() {
 	defer func() {
 		c.Hub.LeaveRoom(c.RoomID, c)
 		c.Conn.Close()
-		log.Log.Infof("用户 [%s] 断开连接，离开房间 [%s]", c.Username, c.RoomID)
+		log.Log.Infof("User [%s] connection close，leaving room [%s]", c.Username, c.RoomID)
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
@@ -40,21 +39,21 @@ func (c *Client) ReadPump() {
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
-			log.Log.Warnf("读消息错误:", err)
+			log.Log.Warnf("Read message error: %v", err)
 			break
 		}
-		log.Log.Debugf("收到用户 [%s] 的原始消息: %s", c.Username, string(message))
+		log.Log.Debugf("Receive user [%s] original message: %s", c.Username, string(message))
 		c.HandleMessage(message)
 	}
 }
 
-// 将消息发送到客户端
+// Send message to the client
 func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
-		log.Log.Infof("关闭用户 [%s] 的写连接", c.Username)
+		log.Log.Infof("Close user [%s] write connection", c.Username)
 	}()
 
 	for {
@@ -62,7 +61,6 @@ func (c *Client) WritePump() {
 		case msg, ok := <-c.Send:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// channel 关闭
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -85,7 +83,7 @@ func (c *Client) HandleMessage(msg []byte) {
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(msg, &base); err != nil {
-		log.Log.Warnf("Cannot parse message:", err)
+		log.Log.Warnf("Cannot parse message: %v", err)
 		return
 	}
 
@@ -95,7 +93,7 @@ func (c *Client) HandleMessage(msg []byte) {
 	case "message":
 		c.handleBroadcastMessage(msg)
 	default:
-		log.Log.Warnf("Unknow message type:", base.Type)
+		log.Log.Warnf("Unknow message type: %v", base.Type)
 	}
 }
 
@@ -104,7 +102,7 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(msg, &incoming); err != nil {
-		log.Log.Errorf("文本消息解析失败:", err)
+		log.Log.Errorf("Failed to parse text message: %v", err)
 		return
 	}
 
@@ -115,9 +113,10 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 		"roomID": c.RoomID,
 		"sentAt": time.Now().UTC().Format(time.RFC3339Nano),
 	}
-	log.Log.Info("WebSocket 收到來自用戶 %s 的消息，將轉發給本地房間並推送 Kafka", c.Username)
+	log.Log.Infof("Received message from user %s via WebSocket. Forwarding to local room and pushing to Kafka.", c.Username)
 
 	jsonMsg, _ := json.Marshal(out)
+
 	c.Hub.Broadcast(c.RoomID, jsonMsg)
 	kafkaMsg := &sarama.ProducerMessage{
 		Topic: "chat_messages",
@@ -132,12 +131,17 @@ func (c *Client) handleBroadcastMessage(msg []byte) {
 	}
 	_, _, err := kafka.Producer.SendMessage(kafkaMsg)
 	if err != nil {
-		log.Log.Errorf("Kafka 發送失敗: %v", err)
+		log.Log.Errorf("Kafka send failed: %v", err)
 	}
+	//if err := SaveMessageToRedis(c.RoomID, jsonMsg); err != nil {
+	//	log.Log.Errorf("Save Redis message failed（room: %s）: %v", c.RoomID, err)
+	//} else {
+	//	log.Log.Debugf("Redis saved message from [%s]", c.RoomID)
+	//}
+
 }
 
 func (c *Client) handleFetchHistory(msg []byte) {
-	// Step 1: 解析请求
 	var req struct {
 		Type   string `json:"type"`
 		RoomID string `json:"roomID"`
@@ -145,55 +149,50 @@ func (c *Client) handleFetchHistory(msg []byte) {
 		Limit  int    `json:"limit"`
 	}
 	if err := json.Unmarshal(msg, &req); err != nil {
-		log.Log.Errorf("fetch_history 消息解析失败:", err)
+		log.Log.Errorf("fetch_history message parse failed %v:", err)
 		return
 	}
 
-	// Step 2: 解析时间戳
-	beforeTime := time.Now().UTC() // 默认当前时间
+	beforeTime := time.Now().UTC()
 	if req.Before != "" {
 		parsedTime, err := time.Parse(time.RFC3339Nano, req.Before)
 		if err != nil {
-			log.Log.Errorf("时间戳格式错误: %v", err)
+			log.Log.Errorf("Timestamp format error: %v", err)
 			return
 		}
 		beforeTime = parsedTime
 	}
 
-	// Step 3: 拉取历史消息
 	messages, err := getMessagesFromDynamo(req.RoomID, beforeTime.Format(time.RFC3339Nano), req.Limit)
 	if err != nil {
-		log.Log.Errorf("获取 DynamoDB 历史消息失败: %v", err)
+		log.Log.Errorf("Failed to fetch historical messages from DynamoDB: %v", err)
 		return
 	}
 
-	// Step 4: 取出最后一条消息时间（用于前端翻页）
 	lastTime := ""
 	if len(messages) > 0 {
 		lastTime = messages[len(messages)-1].Timestamp
 	}
 
-	// Step 5: 构造响应
 	resp := map[string]interface{}{
 		"type":            "history_result",
 		"roomID":          req.RoomID,
-		"messages":        messages, // 结构体数组，前端能直接读取 msg.text
+		"messages":        messages,
 		"hasMore":         len(messages) == req.Limit,
 		"lastMessageTime": lastTime,
 	}
 
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
-		log.Log.Errorf("JSON 编码失败:", err)
+		log.Log.Errorf("JSON encoding failed:", err)
 		return
 	}
 
-	// Step 6: 推送给当前客户端
 	c.Send <- respBytes
 }
 
 func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynamodb.Message, error) {
-	log.Log.Infof("准备从 DynamoDB 拉取消息 | Table: messages | RoomID: %s | Before: %s | Limit: %d", roomID, beforeTime, limit)
+	log.Log.Infof("Preparing to fetch messages from DynamoDB | Table: messages | RoomID: %s | Before: %s | Limit: %d", roomID, beforeTime, limit)
 	input := &ddb.QueryInput{
 		TableName: aws.String("messages"),
 		KeyConditions: map[string]types.Condition{
@@ -216,7 +215,7 @@ func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynam
 
 	resp, err := dynamodb.DB.Query(context.TODO(), input)
 	if err != nil {
-		log.Log.Errorf("DynamoDB 查询失败: %v", err)
+		log.Log.Errorf("DynamoDB lookup falied: %v", err)
 		return nil, err
 	}
 
@@ -224,11 +223,11 @@ func getMessagesFromDynamo(roomID string, beforeTime string, limit int) ([]dynam
 	for _, item := range resp.Items {
 		var msg dynamodb.Message
 		if err := attributevalue.UnmarshalMap(item, &msg); err != nil {
-			log.Log.Errorf("解码消息失败: %v", err)
+			log.Log.Errorf("Decode message failed: %v", err)
 			continue
 		}
 		result = append(result, msg)
 	}
-	log.Log.Info("Get MessagesFromDynamo: %d 条消息", len(result))
+	log.Log.Info("Get MessagesFromDynamo: %d messages", len(result))
 	return result, nil
 }

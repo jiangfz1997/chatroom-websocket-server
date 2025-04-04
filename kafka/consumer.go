@@ -22,8 +22,8 @@ func (h *MessageHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return n
 func (h *MessageHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
 		if h.OnMessage != nil {
-			log.Log.Debugf("Kafka 收到消息: topic=%s partition=%d offset=%d", msg.Topic, msg.Partition, msg.Offset)
-			h.OnMessage(msg) // 调用你注入的回调
+			log.Log.Debugf("Kafka recv msg: topic=%s partition=%d offset=%d", msg.Topic, msg.Partition, msg.Offset)
+			h.OnMessage(msg)
 		}
 		sess.MarkMessage(msg, "")
 	}
@@ -37,32 +37,23 @@ func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessag
 	group, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
 		//log.Fatalf("Kafka customer init failed: %v", err)
-		log.Log.Errorf("Kafka customer init failed (non-fatal)：%v", err)
+		log.Log.Fatalf("Kafka customer init failed (fatal)：%v", err)
 		return
 	}
-
-	//go func() {
-	//	for {
-	//		err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
-	//		if err != nil {
-	//			log.Printf("Kafka consumer err: %v", err)
-	//		}
-	//	}
-	//}()
 
 	go func() {
 		retries := 0
 		for {
 			if retries > 10 {
-				log.Log.Error("Kafka consumer 重試次數超過上限，終止連線")
+				log.Log.Error("Kafka consumer failed after 10 retries")
 				break
 			}
 
 			err := group.Consume(context.Background(), []string{topic}, &MessageHandler{OnMessage: onMessage})
 			if err != nil {
-				log.Log.Warnf("Kafka 消費異常：%v（第 %d 次重試）", err, retries+1)
+				log.Log.Warnf("Kafka consumer failed ：%v（attempt: %d）", err, retries+1)
 				retries++
-				time.Sleep(5 * time.Second) // 🔁 避免 log 洪水
+				time.Sleep(5 * time.Second)
 			}
 		}
 	}()
