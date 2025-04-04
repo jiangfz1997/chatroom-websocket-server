@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"sync"
 	log "websocket_server/logger"
+	"websocket_server/redis"
 )
 
 type Client struct {
@@ -38,6 +39,7 @@ func NewHub() *Hub {
 var GlobalHub = NewHub()
 
 func (h *Hub) JoinRoom(roomID string, client *Client) {
+
 	h.Lock.Lock()
 	room, exists := h.Rooms[roomID]
 	if !exists {
@@ -121,7 +123,7 @@ func (h *Hub) BroadcastFromKafka(kafkaMsg *sarama.ConsumerMessage) {
 	log.Log.Infof("Kafka message parsed successfully, Room ID: %s", parsed.RoomID)
 	log.Log.Infof("Kafka message sync from %s, forwarding to room %s", senderServerID, parsed.RoomID)
 
-	if err := SaveMessageToRedis(parsed.RoomID, parsed.TimeStamp, kafkaMsg.Value); err != nil {
+	if err := redis.SaveMessageToRedis(parsed.RoomID, parsed.TimeStamp, kafkaMsg.Value); err != nil {
 		log.Log.Errorf("Save Redis message failed（room: %s）: %v", parsed.RoomID, err)
 	} else {
 		log.Log.Infof("Redis saved message from [%s]", parsed.RoomID)

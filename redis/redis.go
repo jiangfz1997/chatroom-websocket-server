@@ -1,4 +1,4 @@
-package ws
+package redis
 
 import (
 	"context"
@@ -75,4 +75,15 @@ func GetRecentMessages(roomID string) ([]string, error) {
 	key := "room:" + roomID + ":messages"
 	log.Log.Debugf("Get message of room [%s] from redis", roomID)
 	return Rdb.LRange(ctx, key, 0, 49).Result()
+}
+
+func SetUserToken(token string, username string) error {
+	key := "token:" + token
+	err := Rdb.Set(context.Background(), key, username, 24*time.Hour).Err()
+	if err != nil {
+		log.Log.Errorf("Failed to set token in Redis: %v", err)
+		return err
+	}
+	log.Log.Infof("Token saved to Redis: %s -> %s", key, username)
+	return nil
 }

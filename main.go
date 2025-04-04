@@ -4,6 +4,8 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"websocket_server/redis"
+
 	//"log"
 	"math/rand"
 	"os"
@@ -36,7 +38,7 @@ func main() {
 			ws.GlobalHub.BroadcastFromKafka(msg)
 		},
 	)
-	ws.Init_redis()
+	redis.Init_redis()
 	ws.GlobalHub.ServerID = setupServerID()
 	r := gin.Default()
 	r.GET("/ws/:roomId", ws.ServeWs)
