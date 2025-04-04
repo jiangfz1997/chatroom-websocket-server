@@ -40,7 +40,7 @@ func Init_redis() {
 var ttl = config.GetRedisExpireSeconds("chat_message")
 
 // SaveMessageToRedis stores a new chat message in Redis (as raw json)
-func SaveMessageToRedis(roomID string, timestamp int64, message []byte) error {
+func SaveMessageToRedis(roomID string, timestamp string, message []byte) error {
 	dedupKey := "dedup:room:" + roomID
 
 	ok, err := Rdb.SAdd(ctx, dedupKey, timestamp).Result()

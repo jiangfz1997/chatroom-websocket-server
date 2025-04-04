@@ -104,7 +104,6 @@ func (h *Hub) Broadcast(roomID string, message []byte) {
 
 func (h *Hub) BroadcastFromKafka(kafkaMsg *sarama.ConsumerMessage) {
 	log.Log.Debug("Kafka message received, processing...")
-
 	var senderServerID string
 	for _, header := range kafkaMsg.Headers {
 		if string(header.Key) == "serverID" {
@@ -112,25 +111,26 @@ func (h *Hub) BroadcastFromKafka(kafkaMsg *sarama.ConsumerMessage) {
 			break
 		}
 	}
+	log.Log.Infof("Kafka message received, processing... %v", kafkaMsg.Value)
+
 	var parsed struct {
-		RoomID    string `json:"roomId"`
-		TimeStamp int64  `json:"sentAt"`
+		RoomID    string `json:"roomID"`
+		TimeStamp string `json:"sentAt"`
 	}
+	_ = json.Unmarshal(kafkaMsg.Value, &parsed)
+	log.Log.Infof("Kafka message parsed successfully, Room ID: %s", parsed.RoomID)
 	log.Log.Infof("Kafka message sync from %s, forwarding to room %s", senderServerID, parsed.RoomID)
 
 	if err := SaveMessageToRedis(parsed.RoomID, parsed.TimeStamp, kafkaMsg.Value); err != nil {
 		log.Log.Errorf("Save Redis message failed（room: %s）: %v", parsed.RoomID, err)
 	} else {
-		log.Log.Debugf("Redis saved message from [%s]", parsed.RoomID)
+		log.Log.Infof("Redis saved message from [%s]", parsed.RoomID)
 	}
 
 	if senderServerID == h.ServerID {
 		log.Log.Debugf("Kafka message from current service [%s]，pass", h.ServerID)
 		return
 	}
-
-	_ = json.Unmarshal(kafkaMsg.Value, &parsed)
-	log.Log.Infof("Kafka message parsed successfully, Room ID: %s", parsed.RoomID)
 
 	h.Broadcast(parsed.RoomID, kafkaMsg.Value)
 

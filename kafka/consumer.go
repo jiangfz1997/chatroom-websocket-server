@@ -33,7 +33,6 @@ func (h *MessageHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sa
 func StartKafkaConsumer(brokers []string, topic string, groupID string, onMessage func(*sarama.ConsumerMessage)) {
 	config := sarama.NewConfig()
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
-
 	group, err := sarama.NewConsumerGroup(brokers, groupID, config)
 	if err != nil {
 		//log.Fatalf("Kafka customer init failed: %v", err)
